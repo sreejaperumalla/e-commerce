@@ -8,12 +8,6 @@ const pool = new Pool({
   },
 });
 
-pool.connect()
-  .then(() => {
-    console.log("Neon PostgreSQL Connected");
-  })
-  .catch((err) => {
-    console.log(err);
-  });
+console.log("Neon PostgreSQL Pool Ready");
 
 module.exports = pool;
