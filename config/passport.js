@@ -12,7 +12,7 @@ passport.use(
         process.env.GOOGLE_CLIENT_SECRET,
 
       callbackURL:
-        "/auth/google/callback",
+        "https://e-commerce-production-68a9.up.railway.app/auth/google/callback",
     },
 
     async (accessToken, refreshToken, profile, done) => {
