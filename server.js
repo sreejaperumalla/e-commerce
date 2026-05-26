@@ -145,7 +145,80 @@ app.post("/register", async (req, res) => {
 
 });
 
+// ================= LOGIN =================
 
+app.post("/login", async (req, res) => {
+
+  try {
+
+    const { email, password } = req.body;
+
+    const result = await pool.query(
+      "SELECT * FROM users WHERE email = $1",
+      [email]
+    );
+
+    if (result.rows.length === 0) {
+
+      return res.status(401).json({
+        message: "User not found",
+      });
+
+    }
+
+    const user = result.rows[0];
+
+    const validPassword =
+      password === user.password;
+
+    if (!validPassword) {
+
+      return res.status(401).json({
+        message: "Invalid password",
+      });
+
+    }
+
+    const token = jwt.sign(
+
+      {
+        id: user.id,
+        email: user.email,
+      },
+
+      process.env.JWT_SECRET || "mysecretkey",
+
+      {
+        expiresIn: "1h",
+      }
+
+    );
+
+    res.json({
+
+      message: "Login successful",
+
+      token,
+
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+      },
+
+    });
+
+  } catch (error) {
+
+    console.log(error);
+
+    res.status(500).json({
+      message: "Login failed",
+    });
+
+  }
+
+});
 // ================= GOOGLE OAUTH =================
 
 app.get(
