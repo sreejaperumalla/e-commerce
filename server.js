@@ -256,11 +256,9 @@ app.get(
 
     );
 
-    res.redirect(
-
-      `http://localhost:5173/oauth-callback?token=${token}&name=${encodeURIComponent(req.user.displayName)}`
-
-    );
+   res.redirect(
+  `https://ecommerce-frontend-five-beryl.vercel.app/oauth-callback?token=${token}&name=${encodeURIComponent(req.user.displayName)}`
+);
 
   }
 
