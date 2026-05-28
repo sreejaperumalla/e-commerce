@@ -15,11 +15,13 @@ const adminMiddleware = (req, res, next) => {
   const token = authHeader.split(" ")[1];
 
   try {
-
+    console.log(token);
     const decoded = jwt.verify(
+        
       token,
       process.env.JWT_SECRET || "mysecretkey"
     );
+    console.log(decoded);
 
     req.user = decoded;
 
