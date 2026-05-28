@@ -5,10 +5,8 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const adminMiddleware = require("./middleware/adminMiddleware");
 const upload = require("./middleware/upload");
-const storage = require("./config/cloudinary");
-dotenv.config();
 
-console.log(process.env.GOOGLE_CLIENT_ID);
+dotenv.config();
 
 const passport = require("./config/passport");
 const session = require("express-session");
@@ -19,7 +17,7 @@ const app = express();
 app.use(express.json());
 
 app.use(
-   cors({
+  cors({
     origin: "*",
     credentials: true,
   })
@@ -27,7 +25,7 @@ app.use(
 
 app.use(
   session({
-    secret: process.env.SESSION_SECRET,
+    secret: process.env.SESSION_SECRET || "mysecretkey",
     resave: false,
     saveUninitialized: true,
   })
@@ -40,7 +38,6 @@ app.use(passport.session());
 app.get("/", (req, res) => {
   res.send("Backend + PostgreSQL running");
 });
-
 
 // ================= ADMIN LOGIN =================
 
@@ -81,7 +78,6 @@ app.post("/admin/login", (req, res) => {
   }
 
 });
-
 
 // ================= REGISTER =================
 
@@ -221,6 +217,7 @@ app.post("/login", async (req, res) => {
   }
 
 });
+
 // ================= GOOGLE OAUTH =================
 
 app.get(
@@ -250,7 +247,7 @@ app.get(
         name: req.user.displayName,
       },
 
-      process.env.JWT_SECRET,
+      process.env.JWT_SECRET || "mysecretkey",
 
       {
         expiresIn: "1h",
@@ -258,14 +255,13 @@ app.get(
 
     );
 
-   res.redirect(
-  `https://ecommerce-frontend-five-beryl.vercel.app/oauth-callback?token=${token}&name=${encodeURIComponent(req.user.displayName)}`
-);
+    res.redirect(
+      `https://ecommerce-frontend-five-beryl.vercel.app/oauth-callback?token=${token}&name=${encodeURIComponent(req.user.displayName)}`
+    );
 
   }
 
 );
-
 
 // ================= PROFILE =================
 
@@ -285,7 +281,6 @@ app.get(
   }
 
 );
-
 
 // ================= PRODUCTS =================
 
@@ -311,56 +306,61 @@ app.get("/products", async (req, res) => {
 
 });
 
-
 // ================= ADD PRODUCT =================
 
-app.post("/products", adminMiddleware, upload.single("image"), async (req, res) => {
+app.post(
+  "/products",
+  adminMiddleware,
+  upload.single("image"),
+  async (req, res) => {
 
-  try {
-    console.log(req.body);
-    console.log(req.file);
-    const {
-      name,
-      category,
-      price,
-      description,
-      stock
-    } = req.body;
-    const image = req.file.path;
-    const result = await pool.query(
+    try {
 
-      `INSERT INTO products
-      (name, category, price, image, description, stock)
-
-      VALUES ($1, $2, $3, $4, $5, $6)
-
-      RETURNING *`,
-
-      [
+      const {
         name,
         category,
         price,
-        image,
         description,
         stock
-      ]
+      } = req.body;
 
-    );
+      const image = req.file.path;
 
-    res.json(result.rows[0]);
+      const result = await pool.query(
 
-  } catch (error) {
+        `INSERT INTO products
+        (name, category, price, image, description, stock)
 
-    console.log(error);
+        VALUES ($1, $2, $3, $4, $5, $6)
 
-    res.status(500).json({
-      message: error.message,
-    });
+        RETURNING *`,
+
+        [
+          name,
+          category,
+          price,
+          image,
+          description,
+          stock
+        ]
+
+      );
+
+      res.json(result.rows[0]);
+
+    } catch (error) {
+
+      console.log(error);
+
+      res.status(500).json({
+        message: error.message,
+      });
+
+    }
 
   }
 
-});
-
+);
 
 // ================= UPDATE PRODUCT =================
 
@@ -421,7 +421,6 @@ app.put("/products/:id", adminMiddleware, async (req, res) => {
 
 });
 
-
 // ================= DELETE PRODUCT =================
 
 app.delete("/products/:id", adminMiddleware, async (req, res) => {
@@ -451,10 +450,9 @@ app.delete("/products/:id", adminMiddleware, async (req, res) => {
 
 });
 
-
 // ================= PLACE ORDER =================
 
-app.post("/orders", authMiddleware,async (req, res) => {
+app.post("/orders", authMiddleware, async (req, res) => {
 
   try {
 
@@ -467,13 +465,17 @@ app.post("/orders", authMiddleware,async (req, res) => {
     const orderResult = await pool.query(
 
       `INSERT INTO orders
-      (total_amount, payment_method)
+      (user_id, total_amount, payment_method)
 
-      VALUES ($1, $2)
+      VALUES ($1, $2, $3)
 
       RETURNING *`,
 
-      [totalAmount, paymentMethod]
+      [
+        req.user.id,
+        totalAmount,
+        paymentMethod
+      ]
 
     );
 
@@ -536,14 +538,239 @@ app.post("/orders", authMiddleware,async (req, res) => {
 
 });
 
+// ================= GET ALL ORDERS =================
 
-// ================= TEST ROUTE =================
+app.get("/orders", authMiddleware, async (req, res) => {
 
-app.get("/test", (req, res) => {
+  try {
 
-  res.send("TEST ROUTE WORKING");
+    const userId = req.user.id;
+
+    const result = await pool.query(`
+
+      SELECT 
+        o.id,
+        o.total_amount as amount,
+        o.payment_method as method,
+        o.status,
+        o.created_at as date,
+        COUNT(oi.id) as items_count
+
+      FROM orders o
+
+      LEFT JOIN order_items oi
+      ON o.id = oi.order_id
+
+      WHERE o.user_id = $1
+
+      GROUP BY o.id
+
+      ORDER BY o.created_at DESC
+
+    `, [userId]);
+
+    const orders = result.rows.map(order => ({
+
+      id: `#${order.id}`,
+
+      amount:
+        `₹${Number(order.amount).toLocaleString('en-IN')}`,
+
+      method:
+        order.method === 'cod'
+          ? 'COD'
+          : 'ONLINE',
+
+      status: order.status,
+
+      date:
+        new Date(order.date).toLocaleString('en-IN'),
+
+    }));
+
+    res.json(orders);
+
+  } catch (error) {
+
+    console.log(error);
+
+    res.status(500).json({
+      message: "Failed to fetch orders"
+    });
+
+  }
 
 });
+
+// ================= GET ORDER DETAILS =================
+
+app.get("/orders/:id", authMiddleware, async (req, res) => {
+
+  try {
+
+    const { id } = req.params;
+
+    const userId = req.user.id;
+
+    const orderResult = await pool.query(`
+
+      SELECT * FROM orders 
+
+      WHERE id = $1
+      AND user_id = $2
+
+    `, [id, userId]);
+
+    if (orderResult.rows.length === 0) {
+
+      return res.status(404).json({
+        message: "Order not found"
+      });
+
+    }
+
+    const order = orderResult.rows[0];
+
+    const itemsResult = await pool.query(`
+
+      SELECT 
+        oi.*,
+        p.name,
+        p.image,
+        p.category
+
+      FROM order_items oi
+
+      JOIN products p
+      ON oi.product_id = p.id
+
+      WHERE oi.order_id = $1
+
+    `, [id]);
+
+    const items = itemsResult.rows.map(item => ({
+
+      id: item.product_id,
+
+      name: item.name,
+
+      price: Number(item.price),
+
+      quantity: item.quantity,
+
+      image: item.image,
+
+      category: item.category
+
+    }));
+
+    res.json({
+
+      orderId: `#${order.id}`,
+
+      date:
+        new Date(order.created_at).toLocaleString('en-IN'),
+
+      totalAmount:
+        Number(order.total_amount),
+
+      shipping: 0,
+
+      items: items,
+
+      status: order.status,
+
+      paymentMethod: order.payment_method
+
+    });
+
+  } catch (error) {
+
+    console.log(error);
+
+    res.status(500).json({
+      message: "Failed to fetch order details"
+    });
+
+  }
+
+});
+
+// ================= ORDER ANALYTICS =================
+
+app.get("/orders/stats/summary", authMiddleware, async (req, res) => {
+
+  try {
+
+    const userId = req.user.id;
+
+    const totalOrdersResult = await pool.query(`
+
+      SELECT COUNT(*) FROM orders
+
+      WHERE user_id = $1
+
+    `, [userId]);
+
+    const totalRevenueResult = await pool.query(`
+
+      SELECT
+      COALESCE(SUM(total_amount), 0) as total
+
+      FROM orders
+
+      WHERE user_id = $1
+
+    `, [userId]);
+
+    const codOrdersResult = await pool.query(`
+
+      SELECT COUNT(*) FROM orders
+
+      WHERE user_id = $1
+      AND payment_method = 'cod'
+
+    `, [userId]);
+
+    const onlineOrdersResult = await pool.query(`
+
+      SELECT COUNT(*) FROM orders
+
+      WHERE user_id = $1
+      AND payment_method = 'online'
+
+    `, [userId]);
+
+    res.json({
+
+      totalOrders:
+        parseInt(totalOrdersResult.rows[0].count),
+
+      totalRevenue:
+        parseInt(totalRevenueResult.rows[0].total),
+
+      codOrders:
+        parseInt(codOrdersResult.rows[0].count),
+
+      onlineOrders:
+        parseInt(onlineOrdersResult.rows[0].count)
+
+    });
+
+  } catch (error) {
+
+    console.log(error);
+
+    res.status(500).json({
+      message: "Failed to fetch order analytics"
+    });
+
+  }
+
+});
+
+// ================= ADMIN ANALYTICS =================
+
 app.get("/admin/analytics", adminMiddleware, async (req, res) => {
 
   try {
@@ -570,15 +797,20 @@ app.get("/admin/analytics", adminMiddleware, async (req, res) => {
 
     res.json({
 
-      totalProducts: totalProducts.rows[0].count,
+      totalProducts:
+        totalProducts.rows[0].count,
 
-      totalOrders: totalOrders.rows[0].count,
+      totalOrders:
+        totalOrders.rows[0].count,
 
-      totalRevenue: totalRevenue.rows[0].sum,
+      totalRevenue:
+        totalRevenue.rows[0].sum,
 
-      outOfStock: outOfStock.rows[0].count,
+      outOfStock:
+        outOfStock.rows[0].count,
 
-      lowStock: lowStock.rows[0].count
+      lowStock:
+        lowStock.rows[0].count
 
     });
 
@@ -595,8 +827,49 @@ app.get("/admin/analytics", adminMiddleware, async (req, res) => {
   }
 
 });
+
+// ================= ADMIN ORDERS =================
+
+app.get("/admin/orders", adminMiddleware, async (req, res) => {
+
+  try {
+
+    const result = await pool.query(`
+
+      SELECT *
+
+      FROM orders
+
+      ORDER BY id DESC
+
+    `);
+
+    res.json(result.rows);
+
+  } catch (error) {
+
+    console.log(error);
+
+    res.status(500).json({
+      message: error.message
+    });
+
+  }
+
+});
+
+// ================= TEST ROUTE =================
+
+app.get("/test", (req, res) => {
+
+  res.send("TEST ROUTE WORKING");
+
+});
+
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, "0.0.0.0", () => {
+
   console.log(`Server running on port ${PORT}`);
+
 });
