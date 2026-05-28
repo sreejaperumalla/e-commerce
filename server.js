@@ -3,7 +3,9 @@ const authMiddleware = require("./middleware/auth");
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
-
+const adminMiddleware = require("./middleware/adminMiddleware");
+const upload = require("./middleware/upload");
+const storage = require("./config/cloudinary");
 dotenv.config();
 
 console.log(process.env.GOOGLE_CLIENT_ID);
@@ -287,7 +289,7 @@ app.get(
 
 // ================= PRODUCTS =================
 
-app.get("/products", async (req, res) => {
+app.get("/products", authMiddleware, async (req, res) => {
 
   try {
 
@@ -312,19 +314,19 @@ app.get("/products", async (req, res) => {
 
 // ================= ADD PRODUCT =================
 
-app.post("/products", async (req, res) => {
+app.post("/products", adminMiddleware, upload.single("image"), async (req, res) => {
 
   try {
-
+    console.log(req.body);
+    console.log(req.file);
     const {
       name,
       category,
       price,
-      image,
       description,
       stock
     } = req.body;
-
+    const image = req.file.path;
     const result = await pool.query(
 
       `INSERT INTO products
@@ -352,7 +354,7 @@ app.post("/products", async (req, res) => {
     console.log(error);
 
     res.status(500).json({
-      message: "Failed to add product",
+      message: error.message,
     });
 
   }
@@ -362,7 +364,7 @@ app.post("/products", async (req, res) => {
 
 // ================= UPDATE PRODUCT =================
 
-app.put("/products/:id", async (req, res) => {
+app.put("/products/:id", adminMiddleware, async (req, res) => {
 
   try {
 
@@ -422,7 +424,7 @@ app.put("/products/:id", async (req, res) => {
 
 // ================= DELETE PRODUCT =================
 
-app.delete("/products/:id", async (req, res) => {
+app.delete("/products/:id", adminMiddleware, async (req, res) => {
 
   try {
 
@@ -452,7 +454,7 @@ app.delete("/products/:id", async (req, res) => {
 
 // ================= PLACE ORDER =================
 
-app.post("/orders", async (req, res) => {
+app.post("/orders", authMiddleware,async (req, res) => {
 
   try {
 
@@ -542,7 +544,7 @@ app.get("/test", (req, res) => {
   res.send("TEST ROUTE WORKING");
 
 });
-app.get("/admin/analytics", async (req, res) => {
+app.get("/admin/analytics", adminMiddleware, async (req, res) => {
 
   try {
 

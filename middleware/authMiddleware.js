@@ -1,6 +1,6 @@
 const jwt = require("jsonwebtoken");
 
-const authMiddleware = (req, res, next) => {
+const adminMiddleware = (req, res, next) => {
 
   const authHeader = req.headers.authorization;
 
@@ -21,6 +21,14 @@ const authMiddleware = (req, res, next) => {
       process.env.JWT_SECRET || "mysecretkey"
     );
 
+    if (decoded.role !== "admin") {
+
+      return res.status(403).json({
+        message: "Access denied"
+      });
+
+    }
+
     req.user = decoded;
 
     next();
@@ -35,4 +43,4 @@ const authMiddleware = (req, res, next) => {
 
 };
 
-module.exports = authMiddleware;
+module.exports = adminMiddleware;
