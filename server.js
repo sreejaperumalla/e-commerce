@@ -289,7 +289,7 @@ app.get(
 
 // ================= PRODUCTS =================
 
-app.get("/products", authMiddleware, async (req, res) => {
+app.get("/products", async (req, res) => {
 
   try {
 
